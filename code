@@ -1,0 +1,174 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.linear_model import LogisticRegression
+ 
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
+
+
+df = pd.read_csv("Food_Nutrition_Dataset.csv")
+
+
+df[['iron', 'vitamin_c']] = df[['iron', 'vitamin_c']].fillna(0)
+
+
+#그룹화 사용한 통계 분석
+
+group_Avg = (df.groupby('category')[['calories', 'protein', 'carbs', 'fat']].mean())
+group_Count = (df.groupby('category')['food_name'].count())
+group_Stat = (df.groupby('category').agg({
+    'calories' : ['mean', 'max', 'min'],
+    'protein' : ['mean', 'max','min'],
+    'fat' : ['mean', 'max', 'min']
+})
+             )
+group_TopCalorie = (
+    df.loc[
+        df.groupby('category')['calories'].idxmax(),
+        ['category', 'food_name', 'calories']
+    ]
+    .sort_values('calories', ascending=False)
+)
+  
+#데이터 분석 표 확인
+group_Avg
+group_Count
+group_Stat
+group_TopCalorie
+
+
+  
+#데이터 그래프화
+plt.figure(figsize=(8,12))
+sns.barplot(
+    y=group_Avg.index,
+    x=group_Avg['calories']
+)
+
+plt.title('카테고리별 평균 칼로리')
+plt.xlabel('평균 칼로리')
+plt.ylabel('카테고리')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+  
+plt.figure(figsize=(8,12))
+sns.barplot(
+    y=group_Count.index,
+    x=group_Count.values
+)
+
+plt.title('카테고리별 음식 개수')
+plt.xlabel('음식 수')
+plt.ylabel('카테고리')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+
+y = np.arange(len(group_Stat.index))
+height = 0.25
+
+plt.figure(figsize=(8, 12))
+
+plt.barh(y - height, group_Stat['calories']['mean'], height=height, label='평균')
+plt.barh(y,           group_Stat['calories']['max'],  height=height, label='최대')
+plt.barh(y + height,  group_Stat['calories']['min'],  height=height, label='최소')
+
+plt.yticks(y, group_Stat.index)
+plt.xlabel('칼로리')
+plt.title('카테고리별 칼로리 통계 (평균·최대·최소)')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+group_TopCalorie['label'] = group_TopCalorie['category'] + ' - ' + group_TopCalorie['food_name']
+
+
+plt.figure(figsize=(8,12))
+sns.barplot(
+    data=group_TopCalorie,
+    y='label',
+    x='calories'
+)
+
+plt.title('카테고리별 최고 칼로리 음식')
+plt.xlabel('칼로리')
+plt.ylabel('카테고리-음식')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+#군집화 사용한 머신러닝 
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+features = ['calories', 'protein', 'carbs', 'fat', 'iron', 'vitamin_c']
+X = df[features]
+
+pipe = Pipeline([
+    ('scaler', StandardScaler()),
+    ('kmeans', KMeans(
+        n_clusters=5,     
+        random_state=42,
+        n_init='auto'
+    ))
+])
+
+clusters = pipe.fit_predict(X)
+df['cluster'] = clusters
+cluster_summary = df.groupby('cluster')[features].mean()
+cluster_summary
+"""
+Cluster 0: 평균 단백질 높고 지방 낮은 고단백 군집
+
+Cluster 1: 평균 칼로리 높은 고열량 군집
+
+Cluster 2: 탄수화물이 높은 고탄수 군집
+
+Cluster 3: 성분이 전반적으로 낮은 저칼로리 군집
+"""
+
+
+
+X_scaled = StandardScaler().fit_transform(X)
+score = silhouette_score(X_scaled, df['cluster'])
+score
+
+
+#군집화 시각적 표현 그래프
+
+
+  
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(8, 6))
+sns.scatterplot(
+    data=df,
+    x='calories',
+    y='protein',
+    hue='cluster',
+    palette='Set2',
+    s=80
+)
+
+plt.title('영양 성분 기반 음식 군집 결과 (K-Means)')
+plt.xlabel('칼로리 (kcal)')
+plt.ylabel('단백질 (g)')
+plt.legend(title='Cluster')
+plt.tight_layout()
+plt.show()
+
+  
